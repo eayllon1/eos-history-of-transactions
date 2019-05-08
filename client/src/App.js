@@ -58,10 +58,14 @@ export default class App extends React.Component {
 
   triggerStoreKey = async () => {
     await this.storeItem("ACCOUNT_NAME", JSON.stringify(this.state.accountName));
-    this.setState(prevState => ({
-      ...prevState,
-      loggedIn: true
-    }))
+    const resp = await rpc.history_get_actions(
+        this.state.accountName         // Account that owns the data
+    );
+    console.log(resp)
+    this.setState({
+      loggedIn: true,
+      transactions: resp.actions
+    });
   }
 
   triggerRemoveKey = async () => {
@@ -69,7 +73,8 @@ export default class App extends React.Component {
     if (success) {
       this.setState({
         loggedIn: false,
-        accountName: ''
+        accountName: '',
+        transactions: ''
       })
     }
   }
@@ -79,19 +84,13 @@ export default class App extends React.Component {
       let accountName = await this.retrieveItem("ACCOUNT_NAME");
       console.log(accountName);
       if (accountName != '' && accountName != null) {
-        const resp = await rpc.get_table_rows({
-            json: true,              // Get the response as json
-            code: 'eosio.token',     // Contract that we target
-            scope: accountName,         // Account that owns the data
-            table: 'accounts',        // Table name
-            limit: 10,               // Maximum number of rows that we want to get
-            reverse: false,         // Optional: Get reversed data
-            show_payer: false,      // Optional: Show ram payer
-        });
+        const resp = await rpc.history_get_actions(
+            accountName         // Account that owns the data
+        );
         console.log(resp)
         this.setState({
           loggedIn: true,
-          transactions: resp,
+          transactions: resp.actions,
           accountName: accountName
         });
       }
@@ -105,16 +104,23 @@ export default class App extends React.Component {
     return (
       <View style={styles.container}>
         <Text style = {{fontSize: 20, marginBottom: 20, fontWeight: '600'}}>
-          EOS Balances
+          EOS History
         </Text>
         { this.state.loggedIn ? (
           <View>
-            <Text style = {{fontWeight: '900'}}>Balance for {this.state.accountName}</Text>
-            {Object.keys(this.state.transactions.rows).map(key => { return(
-              <Text style = {{fontSize: 20}}>
-                { this.state.transactions.rows[key].balance }
-              </Text>
-            )})}
+            <Text style = {{fontWeight: '900'}}>Past transactions for {this.state.accountName}</Text>
+            {Object.keys(this.state.transactions).map(key => {
+              if (this.state.transactions[key].action_trace.act.account === "eosio.token") {
+                return(
+                  <View key={key} style = {{display:'flex', flexDirection: 'row'}}>
+                    <Text>From: {this.state.transactions[key].action_trace.act.data.from} </Text>
+                    <Text>To: {this.state.transactions[key].action_trace.act.data.to} </Text>
+                    <Text> {this.state.transactions[key].action_trace.act.data.quantity} </Text>
+                    <Text>Memo: {this.state.transactions[key].action_trace.act.data.memo}</Text>
+                  </View>
+                )
+              }
+            })}
             <Button
               title='Remove Account'
               onPress={this.triggerRemoveKey}
